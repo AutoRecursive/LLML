@@ -2,9 +2,10 @@
 
 ;; 定义模块宏
 (defmacro define-module (name (&key input output) &body body)
+  (declare (ignore output))  ; 显式声明忽略 output 参数
   `(defun ,name (,input)
      (let ((result (progn ,@body)))
-       (values result))))
+       result)))
 
 ;; 工作流操作符
 (defmacro -> (initial &rest forms)

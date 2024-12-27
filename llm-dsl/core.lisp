@@ -1,13 +1,19 @@
 (in-package #:llm-dsl)
 
+;; 定义全局配置变量
+(defvar *current-llm-config* nil)
+
 ;; LLM 配置结构
 (defclass llm-config ()
   ((model :initarg :model
           :accessor llm-model
-          :initform "qwen2.5")
+          :initform "qwen2")
    (temperature :initarg :temperature
                 :accessor llm-temperature
                 :initform 0.7)
+   (system :initarg :system
+           :accessor llm-system
+           :initform nil)
    (api-url :initarg :api-url
             :accessor llm-api-url
             :initform "http://localhost:11434/api/generate")))
@@ -33,8 +39,7 @@
                 while line
                 do (handler-case
                      (let* ((json-response (jonathan:parse line :as :hash-table))
-                           (response-text (gethash "response" json-response)))
-                       (format t "~&Parsed JSON: ~A~%" json-response)
+                            (response-text (gethash "response" json-response)))
                        (when response-text
                          (setf result (concatenate 'string result response-text))))
                      (error (e)
@@ -43,18 +48,25 @@
         (format t "~&Error processing response: ~A~%" e)))
     result))
 
-;; 与Ollama API交互 - 修改后的版本
-(defun call-ollama (prompt &optional (config (make-instance 'llm-config)))
+;; 与Ollama API交互 - 使用当前配置
+(defun call-ollama (prompt &optional (config *current-llm-config*))
+  (unless config
+    (setf config (make-instance 'llm-config)))
   (format t "~&Sending request to Ollama with model: ~A~%" (llm-model config))
-  (let* ((response (dex:post (llm-api-url config)
-                            :content (jonathan:to-json
-                                    `(("model" . ,(llm-model config))
-                                      ("prompt" . ,prompt)
-                                      ("temperature" . ,(llm-temperature config)))
-                                    :from :alist)
-                            :force-binary t))  ; 强制二进制响应
+  (let* ((request-data `(("model" . ,(llm-model config))
+                        ("prompt" . ,prompt)
+                        ("temperature" . ,(llm-temperature config))))
+         ;; 如果有系统提示词，添加到请求中
+         (request-data (if (llm-system config)
+                          (cons `("system" . ,(llm-system config)) request-data)
+                          request-data))
+         (response (dex:post (llm-api-url config)
+                           :content (jonathan:to-json request-data :from :alist)
+                           :force-binary t
+                           :read-timeout nil     ; 设置为 nil 表示无超时限制
+                           :connect-timeout nil  ; 连接超时也设置为无限制
+                           :keep-alive t))
          (response-text (babel:octets-to-string response :encoding :utf-8)))
-    (format t "~&Raw response: ~A~%" response-text)
     (process-ollama-response response-text)))
 
 (defun test-connection ()

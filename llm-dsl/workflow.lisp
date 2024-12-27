@@ -6,10 +6,12 @@
 
 ;; LLM上下文管理宏
 (defmacro with-llm ((&key (model "llama2") 
-                         (temperature 0.7)) 
+                         (temperature 0.7)
+                         system) 
                     &body body)
   `(let ((*current-llm-config* 
           (make-instance 'llm-config 
                         :model ,model 
-                        :temperature ,temperature)))
+                        :temperature ,temperature
+                        :system ,system)))
      ,@body)) 
